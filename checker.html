@@ -1,0 +1,138 @@
+<html>
+    <head>
+        <title>Checker</title>
+        <style>
+            #alerts {
+                border: solid 1px black;
+                padding: 10px;
+            }
+            .alert {
+                border: solid 5px red;
+                padding: 5px;
+                margin-bottom: 5px;
+            }
+            .alert-ok {
+                border: solid 5px blue;
+                padding: 5px;
+                margin-bottom: 5px;
+            }
+            .alert-ts {
+                margin: 5px 0 5px 0;
+                color: green;
+                font-size: x-large;
+                font-weight: bold;
+            }
+            .alert-diff {
+                margin: 5px 0 5px 0;
+            }
+            del {
+                background: #FFE6E6;
+            }
+            ins {
+                background:#E6FFE6;
+            }
+        </style>
+    </head>
+    <body>
+        <!--TODO: add form for choosing class number, etc -->
+        <h2>Alerts</h2>
+        <div id="alerts">
+        </div>
+
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.14.1/moment.min.js"></script>
+        <script src="jsdiff.js"></script>
+        <script>
+            var term = "1169";
+            var subject = "BIOL";
+            var cournum = "266";
+            var scheduleUrl = "https://cors-anywhere.herokuapp.com/http://www.adm.uwaterloo.ca/cgi-bin/cgiwrap/infocour/salook.pl?level=under&sess=" +
+                term + "&subject=" + subject + "&cournum=" + cournum;
+            var intervalMs = 5 * 60 * 1000;
+            var currentCopy = null;
+            var alerts = 0;
+
+            // TODO: clean up
+            // from https://jsfiddle.net/terryyounghk/kpegu/
+            function tableToText($table) {
+                var $rows = $table.find('tr:has(td)'),
+
+                    // Temporary delimiter characters unlikely to be typed by keyboard
+                    // This is to avoid accidentally splitting the actual contents
+                    tmpColDelim = String.fromCharCode(11), // vertical tab character
+                    tmpRowDelim = String.fromCharCode(0), // null character
+
+                    // actual delimiter characters for CSV format
+                    colDelim = ', ',
+                    rowDelim = '\r\n',
+
+                    // Grab text from table into CSV formatted string
+                    csv = $rows.map(function (i, row) {
+                        var $row = $(row),
+                            $cols = $row.find('td');
+
+                        return $cols.map(function (j, col) {
+                            var $col = $(col),
+                                text = $col.text().replace(/\s+/g,' ').trim();
+
+                            return text.replace(/"/g, '""'); // escape double quotes
+
+                        }).get().join(tmpColDelim);
+
+                    }).get().join(tmpRowDelim)
+                        .split(tmpRowDelim).join(rowDelim)
+                        .split(tmpColDelim).join(colDelim);
+
+                return csv;
+            }
+
+            // Fetch data and compare
+            function doFetch() {
+                $.get(scheduleUrl, function(resultHtml) {
+                    var $resultTable = $(resultHtml).children("table");
+
+                    var $diff = $("<div>").addClass("alert-diff");
+                    var $timestamp = $("<div>").addClass("alert-ts")
+                        .html(moment().format('MMMM Do YYYY, h:mm:ss a'));
+                    var $alert = $("<div>")
+                        .append($timestamp)
+                        .append($resultTable)
+                        .append($diff);
+
+                    var tableText = tableToText($resultTable.find("table"));
+                    if (currentCopy == null || currentCopy == tableText) {
+                        // first check
+
+                        $alert.addClass("alert-ok");
+                    } else {
+                        // difference detected
+                        // TODO: send email alert?
+                        $alert.addClass("alert");
+                        $diff.append(diffString(currentCopy, tableText));
+                        alerts++;
+                        document.title = "(" + alerts + ") Checker";
+                    }
+
+                    // Set current copy
+                    currentCopy = tableText;
+
+                    $("#alerts").prepend($alert);
+                });
+            }
+
+            $(function() {
+                // clear notifications on focus/blur
+                window.onblur = window.onfocus = function() {
+                    document.title = 'Checker';
+                    alerts = 0;
+                }
+
+                doFetch();
+                // Main loop
+                setInterval(function() {
+                    doFetch();
+                }, intervalMs);
+            });
+        </script>
+    </body>
+</html>
